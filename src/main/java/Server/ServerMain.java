@@ -73,28 +73,26 @@ public class ServerMain {
             broadcast(Response.lobbyMenuResponse(),this);
             String request;
             try {
-                while (!(request = in.readLine()).equals("null")) {
-                    System.out.println(request);
-                    String response = Response.responseCreator(new JSONObject(request),statement);
-                    System.out.println(response);
-                    broadcast(response,this);
+                while ((request = in.readLine()) != null) {
+                    if (!request.equals("null")) {
+                        System.out.println(request);
+                        String response = Response.responseCreator(new JSONObject(request), statement);
+                        System.out.println(response);
+                        broadcast(response, this);
+                    }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
 
-            finally {
+            } catch (IOException | SQLException e) {
+                e.printStackTrace();
+            } finally {
                 try {
                     socket.close();
                     clients.remove(this);
+                    System.out.println("closing");
                     statement.close();
                     connection.close();
                     System.out.println("Client disconnected: " + socket.getRemoteSocketAddress());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (SQLException e) {
+                } catch (IOException | SQLException e) {
                     e.printStackTrace();
                 }
             }
