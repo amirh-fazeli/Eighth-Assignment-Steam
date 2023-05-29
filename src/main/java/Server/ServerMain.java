@@ -95,7 +95,6 @@ public class ServerMain {
                     socket.close();
                     clients.remove(this);
                     statement.close();
-                    connection.close();
                     System.out.println("Client disconnected: " + socket.getRemoteSocketAddress());
                 } catch (IOException | SQLException e) {
                     e.printStackTrace();
