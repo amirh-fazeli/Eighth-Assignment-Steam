@@ -1,12 +1,12 @@
 package Shared;
 
 import Client.Menus;
-import Client.User;
 import org.json.JSONObject;
+import org.mindrot.jbcrypt.BCrypt;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.UUID;
 
 public class Request {
     public static String createRequest(JSONObject response,Scanner scan){
@@ -17,12 +17,12 @@ public class Request {
         }
 
         else if (type.equals("user menu")){
-            return createUserMenuRequests(scan,new User(response));
+            return createUserMenuRequests(scan,response);
         }
 
         else if (type.equals("sign up")){
             if (response.get("status").equals("true")){
-                return showUserMenuRequest(new User(response));
+                return showUserMenuRequest(response);
             }
 
             else if (response.get("status").equals("false")){
@@ -39,7 +39,7 @@ public class Request {
 
         else if (type.equals("log in")){
             if (response.getString("status").equals("true")){
-                return showUserMenuRequest(new User(response));
+                return showUserMenuRequest(response);
             }
 
             else {
@@ -57,13 +57,44 @@ public class Request {
         }
 
         else if (type.equals("view game list")){
-            showGameList(response.getJSONObject("games"));
+            return gameListRequest(response, scan);
         }
+
+        else if (type.equals("view details")){
+            printGameDetails(response);
+            System.out.println("do you want to download this game? y/n");
+            if (scan.nextLine().equals("y")){
+                return downloadGameRequest(response.getString("id"),response);
+            }
+
+            else{
+                return showUserMenuRequest(response);
+            }
+        }
+
+        else if (type.equals("search")){
+            return gameListRequest(response,scan);
+        }
+
 
         return null;
     }
 
-    private static List<String> showGameList(JSONObject games) {
+    private static void printGameDetails(JSONObject response) {
+        JSONObject details = response.getJSONObject("details");
+
+        System.out.println("name: " + details.getString("title"));
+        System.out.println("developer: " + details.getString("developer"));
+        System.out.println("genre: " + details.getString("genre"));
+        System.out.println("price: " + details.getString("price"));
+        System.out.println("release year: " + details.getString("release_year"));
+        System.out.println("controller support: " + details.getString("controller_support"));
+        System.out.println("reviews: " + details.getString("reviews"));
+        System.out.println("size: " + details.getString("size"));
+    }
+
+    private static String gameListRequest(JSONObject response,Scanner scan) {
+        JSONObject games = response.getJSONObject("games");
         List<String> ids =List.copyOf(games.keySet());
 
         for(int i=0;i<ids.size();i++){
@@ -72,18 +103,63 @@ public class Request {
                     ", " + game.getString("reviews"));
         }
 
-        return ids;
+        System.out.println("do you want to choose a game? y/n");
+        if (scan.nextLine().equals("y")){
+            System.out.println("insert a number");
+            String gameId = ids.get(Integer.parseInt(scan.nextLine()) - 1);
+            System.out.println("what do you want to do with " + games.getJSONObject(gameId).getString("title") + "?");
+            System.out.println("1.view details\n2.download");
+            switch (Integer.parseInt(scan.nextLine())){
+                case 1:
+                    return viewDetailRequest(gameId,response);
+
+                case 2:
+                    return downloadGameRequest(gameId,response);
+            }
+        }
+
+        else{
+            return showUserMenuRequest(response);
+        }
+
+        return null;
     }
 
-    private static String createUserMenuRequests(Scanner scan, User user) {
-        System.out.println(user.getUsername());
+    private static String downloadGameRequest(String gameId, JSONObject response) {
+        JSONObject json = new JSONObject();
+
+        json.put("type","download");
+        json.put("id",gameId);
+        json.put("user",response.getJSONObject("user"));
+
+        return json.toString();
+    }
+
+    private static String viewDetailRequest(String gameId, JSONObject response) {
+        JSONObject json = new JSONObject();
+
+        json.put("type","view details");
+        json.put("id",gameId);
+        json.put("user",response.getJSONObject("user"));
+
+        return json.toString();
+    }
+
+    private static String createUserMenuRequests(Scanner scan, JSONObject response) {
+        JSONObject user = response.getJSONObject("user");
+
+        System.out.println(user.getString("username"));
         System.out.println(Menus.userMenu());
         System.out.println("insert a number");
         int ch = Integer.parseInt(scan.nextLine());
 
         switch (ch){
             case 1:
-                return viewGameListRequest(user);
+                return viewGameListRequest(response);
+
+            case 2:
+                return searchGameRequest(response,scan);
+
             case 3:
                 return showLobbyMenuRequest();
         }
@@ -91,11 +167,24 @@ public class Request {
         return null;
     }
 
-    private static String viewGameListRequest(User user) {
+    private static String searchGameRequest(JSONObject response,Scanner scan) {
+        JSONObject json = new JSONObject();
+
+        json.put("type","search");
+        json.put("user",response.getJSONObject("user"));
+
+
+        System.out.println("insert the title of the game you want to search");
+        json.put("title",scan.nextLine());
+
+        return json.toString();
+    }
+
+    private static String viewGameListRequest(JSONObject response) {
         JSONObject json = new JSONObject();
 
         json.put("type", "view games");
-        json.put("user",user.userTOJson());
+        json.put("user", response.getJSONObject("user"));
 
         return json.toString();
     }
@@ -109,11 +198,11 @@ public class Request {
         return json.toString();
     }
 
-    public static String showUserMenuRequest(User user){
+    public static String showUserMenuRequest(JSONObject response){
         JSONObject json = new JSONObject();
 
         json.put("type","user menu");
-        json.put("username", user.getUsername());
+        json.put("user",response.getJSONObject("user"));
 
         return json.toString();
     }
@@ -129,21 +218,35 @@ public class Request {
 
             case 2:
                 return createLogInRequest(scan);
+
+            case 3:
+                return exitRequest();
         }
         return null;
     }
 
+    private static String exitRequest() {
+        JSONObject json = new JSONObject();
+        json.put("type","exit");
+
+        return json.toString();
+    }
+
     private static String createLogInRequest(Scanner scan) {
         JSONObject json = new JSONObject();
+        JSONObject user = new JSONObject();
         json.put("type","log in");
 
         System.out.println("insert your username");
         String username = scan.nextLine();
-        json.put("username",username);
+        user.put("username",username);
 
+        String fixedSalt = "$2a$10$5YX0fWlR/.MnPFOrWZWJ8u";
         System.out.println("insert your password");
-        String password = scan.nextLine();
-        json.put("password",password);
+        String password = BCrypt.hashpw(scan.nextLine(), fixedSalt);
+        user.put("password",password);
+
+        json.put("user",user);
 
         return json.toString();
     }
@@ -154,12 +257,29 @@ public class Request {
 
         System.out.println("insert your username");
         String username = scan.nextLine();
-        json.put("username",username);
 
+        String fixedSalt = "$2a$10$5YX0fWlR/.MnPFOrWZWJ8u";
         System.out.println("insert your password");
-        String password = scan.nextLine();
-        json.put("password",password);
+        String password = BCrypt.hashpw(scan.nextLine(), fixedSalt);
+
+        System.out.println("insert your birthday (YYYY-MM-DD)");
+        String date = scan.nextLine();
+
+        UUID uuid= UUID.randomUUID();
+
+        json.put("user",userTOJson(username,password,date,uuid.toString()));
 
         return json.toString();
+    }
+
+    public static JSONObject userTOJson(String username,String password,String date,String id){
+        JSONObject json = new JSONObject();
+
+        json.put("id",id);
+        json.put("username",username);
+        json.put("password",password);
+        json.put("date",date);
+
+        return json;
     }
 }

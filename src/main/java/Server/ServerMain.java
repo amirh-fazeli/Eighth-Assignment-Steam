@@ -31,7 +31,7 @@ public class ServerMain {
             try {
                 Socket socket = serverSocket.accept();
                 System.out.println("New client connected: " + socket.getRemoteSocketAddress());
-                ClientHandler handler = new ClientHandler(socket,connection);
+                ClientHandler handler = new ClientHandler(socket, connection);
                 clients.add(handler);
                 handler.start();
             } catch (IOException e) {
@@ -49,7 +49,7 @@ public class ServerMain {
         return connection;
     }
 
-    private class ClientHandler extends Thread {
+    public class ClientHandler extends Thread {
         private Socket socket;
         private Connection connection;
         private BufferedReader in;
@@ -70,15 +70,21 @@ public class ServerMain {
                 e.printStackTrace();
             }
 
-            broadcast(Response.lobbyMenuResponse(),this);
+            this.out.println(Response.lobbyMenuResponse());
             String request;
             try {
                 while ((request = in.readLine()) != null) {
                     if (!request.equals("null")) {
-                        System.out.println(request);
-                        String response = Response.responseCreator(new JSONObject(request), statement);
-                        System.out.println(response);
-                        broadcast(response, this);
+                        JSONObject jsonRequest = new JSONObject(request);
+                        if (jsonRequest.getString("type").equals("exit")){
+                            socket.close();
+                            clients.remove(this);
+                        }
+                        else if (jsonRequest.getString("type").equals("download")) {
+                            SendFiles(new JSONObject(request).getString("id"), socket);
+                        }
+                        String response = Response.responseCreator(jsonRequest, statement);
+                        this.out.println(response);
                     }
                 }
 
@@ -88,7 +94,6 @@ public class ServerMain {
                 try {
                     socket.close();
                     clients.remove(this);
-                    System.out.println("closing");
                     statement.close();
                     connection.close();
                     System.out.println("Client disconnected: " + socket.getRemoteSocketAddress());
@@ -97,9 +102,28 @@ public class ServerMain {
                 }
             }
         }
+    }
 
-        private void broadcast(String message,ClientHandler client) {
-                client.out.println(message);
+    public static void SendFiles(String id, Socket clientsocket) {
+        File file = new File("D:\\Eighth-Assignment-Steam\\src\\main\\java\\Server\\Resources\\" + id + ".png");
+        long fileSize = file.length();
+
+        try {
+            FileInputStream fis = new FileInputStream(file);
+            BufferedInputStream bis = new BufferedInputStream(fis);
+            DataOutputStream outputStream = new DataOutputStream(clientsocket.getOutputStream());
+            outputStream.writeLong(fileSize);
+            outputStream.flush();
+
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+
+            while ((bytesRead = bis.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }
